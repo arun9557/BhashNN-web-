@@ -636,7 +636,7 @@ function App() {
           <p>
             The Python server manages the Ollama local AI API wrapping. The Gateway acts as the BLE Central, scanning for mesh packets and forwarding queries to Ollama.
           </p>
-          <a href="file:///x:/Users/bitai/bnn-server" className="software-link">
+          <a href="https://github.com/arun9557/B-Hash-NN/tree/main/bnn-server" className="software-link" target="_blank" rel="noopener noreferrer">
             <span>Explore bnn-server/</span>
             <span>➔</span>
           </a>
@@ -651,7 +651,7 @@ function App() {
           <p>
             BLE peripheral Android application featuring full Chat UI and Relay Mode. Acts as a mesh relay to hop packets from remote devices to the local Server.
           </p>
-          <a href="file:///x:/Users/bitai/android" className="software-link">
+          <a href="https://github.com/arun9557/B-Hash-NN/tree/main/android/BhashNN" className="software-link">
             <span>Explore android/</span>
             <span>➔</span>
           </a>
@@ -666,7 +666,7 @@ function App() {
           <p>
             Firmware for microcontrollers and embedded clients. Features GATT Client initialization, scanning, and sensor payload broadcasting to B#NN meshes.
           </p>
-          <a href="file:///x:/Users/bitai/esp32_client" className="software-link">
+          <a href="https://github.com/arun9557/B-Hash-NN/tree/main/esp32_client" className="software-link">
             <span>Explore esp32_client/</span>
             <span>➔</span>
           </a>

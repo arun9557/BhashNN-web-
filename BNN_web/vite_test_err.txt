@@ -1,0 +1,1 @@
+[33mThe project root contains the "#" character ([36mC:/Users/b_hash-NN-web/B#NN_web[33m), which may not work when running Vite. Consider renaming the directory without the characters.[39m

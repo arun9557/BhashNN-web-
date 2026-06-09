@@ -1,6 +1,72 @@
 import { useState, useEffect, useRef } from 'react'
 import './App.css'
 
+// Static Nodes in the B#NN network topology
+const NODES = [
+  { id: 'ollama', x: 450, y: 50, label: 'Ollama LLM', role: 'server', icon: '🧠', color: '#aa3bff', device: 'Local AI Brain' },
+  { id: 'gateway', x: 450, y: 130, label: 'BLE Gateway', role: 'gateway', icon: '💻', color: '#00e5ff', device: 'Gateway Server' },
+  { id: 'relay_a', x: 250, y: 210, label: 'Relay Phone A', role: 'relay', icon: '📱', color: '#ff9800', device: 'Android Phone' },
+  { id: 'relay_b', x: 650, y: 210, label: 'Relay Phone B', role: 'relay', icon: '📱', color: '#ff9800', device: 'Android Phone' },
+  { id: 'esp32_bot', x: 150, y: 290, label: 'ESP32 Client', role: 'client', icon: '🤖', color: '#00ff66', device: 'IoT Robot' },
+  { id: 'client_c', x: 350, y: 290, label: 'Client Phone C', role: 'client', icon: '📱', color: '#00ff66', device: 'Android Client' },
+  { id: 'client_d', x: 550, y: 290, label: 'Client Phone D', role: 'client', icon: '📱', color: '#00ff66', device: 'Android Client' },
+  { id: 'client_e', x: 750, y: 290, label: 'Client Phone E', role: 'client', icon: '📱', color: '#00ff66', device: 'Android Client' }
+]
+
+const CONNECTIONS = [
+  { from: 'esp32_bot', to: 'relay_a', type: 'ble' },
+  { from: 'client_c', to: 'relay_a', type: 'ble' },
+  { from: 'client_d', to: 'relay_b', type: 'ble' },
+  { from: 'client_e', to: 'relay_b', type: 'ble' },
+  { from: 'relay_a', to: 'gateway', type: 'ble' },
+  { from: 'relay_b', to: 'gateway', type: 'ble' },
+  { from: 'gateway', to: 'ollama', type: 'local' }
+]
+
+const SERVER_SETUP_CODE = `# Install Python server requirements
+pip install flask flask-cors requests
+
+# Run B#NN Ollama local wrapper
+python server.py
+
+# Expected Output:
+# [B#NN-API] B#NN Flask API starting on 0.0.0.0:5000`
+
+const GATEWAY_SETUP_CODE = `# Run the BLE gateway (Linux requires root for BLE operations)
+sudo python ble_gateway.py
+
+# Expected Output:
+# [B#NN-GATEWAY] BLE Central scanning for advertisements...`
+
+// Mock Offline AI generator based on keywords
+function generateOfflineResponse(prompt) {
+  const lower = prompt.toLowerCase()
+  if (lower.includes('mesh') || lower.includes('flooding') || lower.includes('hop')) {
+    return 'B#NN flooding protocol uses decentralized relays. Each packet features a unique msg_id for caching and deduplication. Each time a node relays, it decrements the ttl (Time-to-Live). If ttl reaches 0, the packet is discarded, preventing endless routing loops.'
+  }
+  if (lower.includes('ollama') || lower.includes('model') || lower.includes('llama')) {
+    return 'The gateway runs server.py which interfaces with Ollama. It accepts POST queries at http://localhost:5000/chat and returns LLM outputs locally, typically utilizing compact models (e.g. Llama-3.2-3B or Phi3) to remain CPU and RAM efficient offline.'
+  }
+  if (lower.includes('esp32') || lower.includes('arduino') || lower.includes('robot')) {
+    return 'ESP32 IoT nodes query the mesh using simple BLE serial configurations. They scan for advertisements starting with "BNN" and exchange chunked payloads of up to 512 bytes with nearby Relay Phones.'
+  }
+  if (lower.includes('support') || lower.includes('coffee')) {
+    return 'Support this project by donating to the B#NN creator at: https://buymeacoffee.com/arunshekhar. Offline AI is made possible by open-source contributions!'
+  }
+  return `Offline Mesh Simulation Active.\n[Path: Client ➔ Relay Phone ➔ Gateway Laptop ➔ Ollama (llama3.2)].\nQuery processed locally: "${prompt}".\nResponse: Decoupled offline mesh operations are healthy. Configure server.py and ble_gateway.py to run live.`
+}
+
+// Select a random prompt from preset list (pure helper to bypass ESLint hook constraints)
+function getRandomSimulatedPrompt() {
+  const prompts = [
+    'How does BLE relay work?',
+    'Read temperature from robot sensors',
+    'Verify BLE connection strength',
+    'Calculate routing hops to server'
+  ]
+  return prompts[Math.floor(Math.random() * prompts.length)]
+}
+
 function App() {
   const [inputMessage, setInputMessage] = useState('')
   const [chatHistory, setChatHistory] = useState([
@@ -12,13 +78,12 @@ function App() {
   ])
   const [serverStatus, setServerStatus] = useState('simulated') // 'online' | 'offline' | 'simulated'
   const [activeModel, setActiveModel] = useState('llama3.2:latest')
-  const [availableModels, setAvailableModels] = useState([])
   const [isLoading, setIsLoading] = useState(false)
   const [activeTab, setActiveTab] = useState('quickstart')
   const [copiedText, setCopiedText] = useState('')
 
   // Packet animation states for the Canvas visualizer
-  const [activePackets, setActivePackets] = useState([])
+  const [, setActivePackets] = useState([])
   const [selectedNode, setSelectedNode] = useState(null)
 
   const chatEndRef = useRef(null)
@@ -32,6 +97,18 @@ function App() {
 
   // Probe local B#NN server on mount
   useEffect(() => {
+    const activateSimulatedMode = () => {
+      setServerStatus('simulated')
+      setChatHistory(prev => [
+        ...prev,
+        {
+          role: 'system',
+          text: 'Local Flask server not detected. B#NN Web running in Simulated Offline Mesh mode. Mesh routing & flooding calculations active.',
+          time: new Date().toLocaleTimeString()
+        }
+      ])
+    }
+
     const checkServer = async () => {
       try {
         const response = await fetch('http://localhost:5000/health')
@@ -48,68 +125,21 @@ function App() {
               time: new Date().toLocaleTimeString()
             }
           ])
-          
-          // Fetch model list
-          try {
-            const mResponse = await fetch('http://localhost:5000/model')
-            if (mResponse.ok) {
-              const mData = await mResponse.json()
-              if (mData.available) {
-                setAvailableModels(mData.available.map(m => m.name || m))
-              }
-            }
-          } catch (me) {
-            console.warn('Could not fetch model list:', me)
-          }
         } else {
-          useSimulatedMode()
+          activateSimulatedMode()
         }
-      } catch (e) {
-        useSimulatedMode()
+      } catch {
+        activateSimulatedMode()
       }
-    }
-
-    const useSimulatedMode = () => {
-      setServerStatus('simulated')
-      setChatHistory(prev => [
-        ...prev,
-        {
-          role: 'system',
-          text: 'Local Flask server not detected. B#NN Web running in Simulated Offline Mesh mode. Mesh routing & flooding calculations active.',
-          time: new Date().toLocaleTimeString()
-        }
-      ])
     }
 
     checkServer()
   }, [])
 
-  // Node locations in the B#NN network topology
-  const nodes = [
-    { id: 'ollama', x: 450, y: 50, label: 'Ollama LLM', role: 'server', icon: '🧠', color: '#aa3bff', device: 'Local AI Brain' },
-    { id: 'gateway', x: 450, y: 130, label: 'BLE Gateway', role: 'gateway', icon: '💻', color: '#00e5ff', device: 'Gateway Server' },
-    { id: 'relay_a', x: 250, y: 210, label: 'Relay Phone A', role: 'relay', icon: '📱', color: '#ff9800', device: 'Android Phone' },
-    { id: 'relay_b', x: 650, y: 210, label: 'Relay Phone B', role: 'relay', icon: '📱', color: '#ff9800', device: 'Android Phone' },
-    { id: 'esp32_bot', x: 150, y: 290, label: 'ESP32 Client', role: 'client', icon: '🤖', color: '#00ff66', device: 'IoT Robot' },
-    { id: 'client_c', x: 350, y: 290, label: 'Client Phone C', role: 'client', icon: '📱', color: '#00ff66', device: 'Android Client' },
-    { id: 'client_d', x: 550, y: 290, label: 'Client Phone D', role: 'client', icon: '📱', color: '#00ff66', device: 'Android Client' },
-    { id: 'client_e', x: 750, y: 290, label: 'Client Phone E', role: 'client', icon: '📱', color: '#00ff66', device: 'Android Client' }
-  ]
-
-  const connections = [
-    { from: 'esp32_bot', to: 'relay_a', type: 'ble' },
-    { from: 'client_c', to: 'relay_a', type: 'ble' },
-    { from: 'client_d', to: 'relay_b', type: 'ble' },
-    { from: 'client_e', to: 'relay_b', type: 'ble' },
-    { from: 'relay_a', to: 'gateway', type: 'ble' },
-    { from: 'relay_b', to: 'gateway', type: 'ble' },
-    { from: 'gateway', to: 'ollama', type: 'local' }
-  ]
-
   // Start packet animation
   const triggerPacketAnimation = (sourceNodeId, payloadText, callback) => {
     // Find routing path to server
-    let path = []
+    let path
     if (sourceNodeId === 'esp32_bot' || sourceNodeId === 'client_c') {
       path = [sourceNodeId, 'relay_a', 'gateway', 'ollama']
     } else if (sourceNodeId === 'client_d' || sourceNodeId === 'client_e') {
@@ -190,9 +220,9 @@ function App() {
       lineDashOffset -= 0.3
 
       // Draw connection lines
-      connections.forEach(conn => {
-        const fromNode = nodes.find(n => n.id === conn.from)
-        const toNode = nodes.find(n => n.id === conn.to)
+      CONNECTIONS.forEach(conn => {
+        const fromNode = NODES.find(n => n.id === conn.from)
+        const toNode = NODES.find(n => n.id === conn.to)
         if (!fromNode || !toNode) return
 
         const x1 = fromNode.x * scale + offsetX
@@ -261,8 +291,8 @@ function App() {
             // Draw particle
             const fromId = updatedPkt.path[updatedPkt.currentIndex]
             const toId = updatedPkt.path[updatedPkt.currentIndex + 1]
-            const fromNode = nodes.find(n => n.id === fromId)
-            const toNode = nodes.find(n => n.id === toId)
+            const fromNode = NODES.find(n => n.id === fromId)
+            const toNode = NODES.find(n => n.id === toId)
             
             if (fromNode && toNode) {
               const px = (fromNode.x + (toNode.x - fromNode.x) * updatedPkt.progress) * scale + offsetX
@@ -294,7 +324,7 @@ function App() {
       })
 
       // Draw Nodes
-      nodes.forEach(node => {
+      NODES.forEach(node => {
         const nx = node.x * scale + offsetX
         const ny = node.y * scale + offsetY
 
@@ -340,7 +370,7 @@ function App() {
       window.removeEventListener('resize', resizeCanvas)
       cancelAnimationFrame(animationRef.current)
     }
-  }, [selectedNode, connections, nodes])
+  }, [selectedNode])
 
   // Mouse hover event on Canvas
   const handleMouseMove = (e) => {
@@ -349,10 +379,7 @@ function App() {
     const rect = canvas.getBoundingClientRect()
     
     // Scale event coordinates
-    const scaleX = 900 / rect.width
     const scaleY = 360 / rect.height
-    const mx = (e.clientX - rect.left) * scaleX
-    const my = (e.clientY - rect.top) * scaleY
 
     // Adjust for offset calculations inside canvas drawing
     const scale = Math.min(rect.width / 900, rect.height / 360)
@@ -360,9 +387,9 @@ function App() {
     const adjX = (e.clientX - rect.left - offsetX) * (900 / (rect.width - offsetX * 2))
     
     let foundNode = null
-    nodes.forEach(node => {
+    NODES.forEach(node => {
       const dx = adjX - node.x
-      const dy = my - node.y
+      const dy = (e.clientY - rect.top) * scaleY - node.y
       const distance = Math.sqrt(dx * dx + dy * dy)
       if (distance < 25) {
         foundNode = node
@@ -375,34 +402,10 @@ function App() {
   // Handle Client Node click to send random message
   const handleCanvasClick = () => {
     if (selectedNode && selectedNode.role === 'client') {
-      const simulatedPrompts = [
-        'How does BLE relay work?',
-        'Read temperature from robot sensors',
-        'Verify BLE connection strength',
-        'Calculate routing hops to server'
-      ]
-      const prompt = simulatedPrompts[Math.floor(Math.random() * simulatedPrompts.length)]
+      const prompt = getRandomSimulatedPrompt()
       setInputMessage(prompt)
       triggerChat(prompt, selectedNode.id)
     }
-  }
-
-  // Mock Offline AI generator based on keywords
-  const generateOfflineResponse = (prompt) => {
-    const lower = prompt.toLowerCase()
-    if (lower.includes('mesh') || lower.includes('flooding') || lower.includes('hop')) {
-      return 'B#NN flooding protocol uses decentralized relays. Each packet features a unique msg_id for caching and deduplication. Each time a node relays, it decrements the ttl (Time-to-Live). If ttl reaches 0, the packet is discarded, preventing endless routing loops.'
-    }
-    if (lower.includes('ollama') || lower.includes('model') || lower.includes('llama')) {
-      return 'The gateway runs server.py which interfaces with Ollama. It accepts POST queries at http://localhost:5000/chat and returns LLM outputs locally, typically utilizing compact models (e.g. Llama-3.2-3B or Phi3) to remain CPU and RAM efficient offline.'
-    }
-    if (lower.includes('esp32') || lower.includes('arduino') || lower.includes('robot')) {
-      return 'ESP32 IoT nodes query the mesh using simple BLE serial configurations. They scan for advertisements starting with "BNN" and exchange chunked payloads of up to 512 bytes with nearby Relay Phones.'
-    }
-    if (lower.includes('support') || lower.includes('coffee')) {
-      return 'Support this project by donating to the B#NN creator at: https://buymeacoffee.com/arunshekhar. Local offline AI systems thrive through community backing!'
-    }
-    return `Offline Mesh Simulation Active.\n[Path: Client ➔ Relay Phone ➔ Gateway Laptop ➔ Ollama (llama3.2)].\nQuery processed locally: "${prompt}".\nResponse: Decoupled offline mesh operations are healthy. Configure server.py and ble_gateway.py to run live.`
   }
 
   // Main Chat Trigger
@@ -454,8 +457,10 @@ function App() {
           } else {
             handleFailedQuery(messageText, startTime)
           }
-        } catch (err) {
+        } catch {
           handleFailedQuery(messageText, startTime)
+        } finally {
+          setIsLoading(false)
         }
       } else {
         // Simulated mode response
@@ -497,7 +502,6 @@ function App() {
         hops: ['Local Fallback']
       }
     ])
-    setIsLoading(false)
   }
 
   const handleCopyCode = (text, id) => {
@@ -505,21 +509,6 @@ function App() {
     setCopiedText(id)
     setTimeout(() => setCopiedText(''), 2000)
   }
-
-  const serverSetupCode = `# Install Python server requirements
-pip install flask flask-cors requests
-
-# Run B#NN Ollama local wrapper
-python server.py
-
-# Expected Output:
-# [B#NN-API] B#NN Flask API starting on 0.0.0.0:5000`
-
-  const gatewaySetupCode = `# Run the BLE gateway (Linux requires root for BLE operations)
-sudo python ble_gateway.py
-
-# Expected Output:
-# [B#NN-GATEWAY] BLE Central scanning for advertisements...`
 
   return (
     <>
@@ -716,11 +705,11 @@ sudo python ble_gateway.py
               <div className="terminal-code">
                 <button 
                   className="copy-btn"
-                  onClick={() => handleCopyCode(serverSetupCode, 'server')}
+                  onClick={() => handleCopyCode(SERVER_SETUP_CODE, 'server')}
                 >
                   {copiedText === 'server' ? 'Copied!' : 'Copy'}
                 </button>
-                <pre><code>{serverSetupCode}</code></pre>
+                <pre><code>{SERVER_SETUP_CODE}</code></pre>
               </div>
 
               <h4>2. Configure BLE Central Gateway</h4>
@@ -728,11 +717,11 @@ sudo python ble_gateway.py
               <div className="terminal-code">
                 <button 
                   className="copy-btn"
-                  onClick={() => handleCopyCode(gatewaySetupCode, 'gateway')}
+                  onClick={() => handleCopyCode(GATEWAY_SETUP_CODE, 'gateway')}
                 >
                   {copiedText === 'gateway' ? 'Copied!' : 'Copy'}
                 </button>
-                <pre><code>{gatewaySetupCode}</code></pre>
+                <pre><code>{GATEWAY_SETUP_CODE}</code></pre>
               </div>
             </div>
           )}

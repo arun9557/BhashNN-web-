@@ -23,6 +23,17 @@ const STATIC_CONNECTIONS = [
   { from: 'gateway', to: 'ollama', type: 'local' }
 ]
 
+const MOCK_MACS = {
+  ollama: '00:1A:2B:3C:4D:5E',
+  gateway: '00:1A:2B:3C:4D:5F',
+  relay_a: 'AA:BB:CC:DD:EE:01',
+  relay_b: 'AA:BB:CC:DD:EE:02',
+  esp32_bot: 'FE:DC:BA:98:76:54',
+  client_c: '44:55:66:77:88:99',
+  client_d: '44:55:66:77:88:AA',
+  client_e: '44:55:66:77:88:BB'
+}
+
 const SERVER_SETUP_CODE = `# Install Python server requirements
 pip install flask flask-cors requests
 
@@ -113,6 +124,13 @@ function App() {
   // Packet Animation and Canvas variables
   const [, setActivePackets] = useState([])
   const [selectedNode, setSelectedNode] = useState(null)
+
+  // Custom States for Upgrades
+  const [senderNode, setSenderNode] = useState('client_c')
+  const [builderMsg, setBuilderMsg] = useState('Test BLE payload')
+  const [builderSender, setBuilderSender] = useState('esp32_bot')
+  const [builderRecipient, setBuilderRecipient] = useState('gateway')
+  const [builderTtl, setBuilderTtl] = useState(4)
 
   const chatEndRef = useRef(null)
   const packetsEndRef = useRef(null)
@@ -672,7 +690,7 @@ function App() {
   // Diagnostics Terminal Command line parser
   const handleDiagnosticsSubmit = (e) => {
     e.preventDefault()
-    if (!dialsgInput.trim()) return
+    if (!diagInput.trim()) return
 
     const cmd = diagInput.trim()
     const parts = cmd.split(' ')
@@ -703,6 +721,110 @@ function App() {
       }
       setDiagnosticsLogs(prev => [...prev, { text: outputText, type: 'sys' }])
     }, 100)
+  }
+
+  // Simulation controls helper functions
+  const handleBroadcastStorm = () => {
+    const timeStr = new Date().toLocaleTimeString()
+    setPacketLogs(prev => [
+      ...prev,
+      { text: `[${timeStr}] MESH_EVENT: Triggering Broadcast Storm! Simultaneous transmissions active...`, type: 'sys' }
+    ])
+
+    const stormClients = [
+      { id: 'esp32_bot', msg: 'PING: sensor_data_01' },
+      { id: 'client_c', msg: 'CHAT: hello_gateway' },
+      { id: 'client_d', msg: 'STATUS: node_healthy' },
+      { id: 'client_e', msg: 'HEARTBEAT: keepalive' }
+    ]
+
+    stormClients.forEach((client, index) => {
+      setTimeout(() => {
+        const route = findMeshRoute(client.id)
+        if (!route) {
+          setPacketLogs(prev => [
+            ...prev,
+            { text: `[${new Date().toLocaleTimeString()}] MESH_DROP: Storm packet from '${client.id}' dropped. (No route)`, type: 'sys' }
+          ])
+          return
+        }
+
+        const msgId = 'storm_' + Math.random().toString(36).substring(2, 6)
+
+        setPacketLogs(prev => [
+          ...prev,
+          { text: `[${new Date().toLocaleTimeString()}] BLE ADV TX: Storm Node '${client.id}' broadcasting msg_id: ${msgId}`, type: 'tx' }
+        ])
+
+        if (nodesOnline.relay_a && (client.id === 'esp32_bot' || client.id === 'client_c')) {
+          setTimeout(() => {
+            setPacketLogs(prev => [
+              ...prev,
+              { text: `[${new Date().toLocaleTimeString()}] DEDUP ALERT: Node 'relay_a' blocked storm packet duplicate. msg_id: ${msgId}`, type: 'sys' }
+            ])
+          }, 300)
+        }
+
+        const newPkt = {
+          id: Math.random().toString(),
+          path: route,
+          currentIndex: 0,
+          progress: 0,
+          direction: 'forward',
+          color: index === 0 ? '#00ff66' : index === 1 ? '#00e5ff' : index === 2 ? '#ff9800' : '#aa3bff',
+          payload: client.msg,
+          msgId,
+          ttl: 4,
+          callback: () => {
+            setPacketLogs(prev => [
+              ...prev,
+              { text: `[${new Date().toLocaleTimeString()}] MESH_STORM SUCCESS: Storm reply received from Gateway for '${client.id}'!`, type: 'rx' }
+            ])
+          }
+        }
+        setActivePackets(prev => [...prev, newPkt])
+      }, index * 200)
+    })
+  }
+
+  const handleDropLinks = () => {
+    const timeStr = new Date().toLocaleTimeString()
+    setNodesOnline(prev => ({
+      ...prev,
+      relay_a: false,
+      relay_b: false
+    }))
+    setDiagnosticsLogs(prev => [
+      ...prev,
+      { text: `[${timeStr}] CONFIG: Emergency Disconnect - Relay A and Relay B set to OFFLINE.`, type: 'sys' }
+    ])
+    setPacketLogs(prev => [
+      ...prev,
+      { text: `[${timeStr}] SYSTEM: All relay mesh links disrupted (emergency disconnect simulated).`, type: 'sys' }
+    ])
+  }
+
+  const handleResetTopology = () => {
+    const timeStr = new Date().toLocaleTimeString()
+    setNodesOnline({
+      ollama: true,
+      gateway: true,
+      relay_a: true,
+      relay_b: true,
+      esp32_bot: true,
+      client_c: true,
+      client_d: true,
+      client_e: true
+    })
+    setPacketLogs([
+      { text: 'SYSTEM: Scan active. Topology database reset to nominal online status.', type: 'sys', time: timeStr }
+    ])
+    setDiagnosticsLogs([
+      { text: 'Diagnostics history cleared. System online.', type: 'sys' }
+    ])
+    setChatHistory([
+      { role: 'system', text: 'Chat sandbox cleared. Mesh operational.', time: timeStr }
+    ])
   }
 
   const handleCopyCode = (text, id) => {
@@ -851,6 +973,61 @@ function App() {
               </select>
             </div>
           </div>
+
+          {/* Simulation Events panel */}
+          <div className="sim-controls-panel">
+            <button 
+              type="button" 
+              className="sim-event-btn"
+              onClick={handleBroadcastStorm}
+              title="Flood the mesh with simultaneous messages to test deduplication"
+            >
+              ⚡ Broadcast Storm
+            </button>
+            <button 
+              type="button" 
+              className="sim-event-btn danger"
+              onClick={handleDropLinks}
+              title="Disconnect all relay nodes instantly"
+            >
+              🔌 Drop Relay Links
+            </button>
+            <button 
+              type="button" 
+              className="sim-event-btn"
+              onClick={handleResetTopology}
+              title="Reset topology online states and clear logs"
+            >
+              🔄 Reset Network
+            </button>
+          </div>
+
+          {/* Detailed Node Status Table */}
+          <h4 style={{ margin: '20px 0 10px', color: 'var(--secondary)' }}>📋 Node Diagnostics Grid</h4>
+          <table className="nodes-status-table">
+            <thead>
+              <tr>
+                <th>Node</th>
+                <th>MAC Address</th>
+                <th>RSSI</th>
+                <th>Hops</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {STATIC_NODES.map(node => (
+                <tr key={node.id}>
+                  <td>{node.label}</td>
+                  <td><code>{MOCK_MACS[node.id]}</code></td>
+                  <td>{nodesOnline[node.id] ? (node.role === 'server' ? 'N/A' : '-64 dBm') : 'OFFLINE'}</td>
+                  <td>{nodesOnline[node.id] ? (node.role === 'server' ? '0' : node.role === 'gateway' ? '0' : '1') : 'N/A'}</td>
+                  <td>
+                    <span className={`status-dot ${nodesOnline[node.id] ? 'online' : 'offline'}`}></span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
 
         {/* Multi-Tab Console Panel */}
@@ -903,11 +1080,32 @@ function App() {
                   <div ref={chatEndRef} />
                 </div>
                 
+                {/* Device Selector in Chat */}
+                <div className="device-selector-bar">
+                  <span className="device-selector-label">SENDER:</span>
+                  {['client_c', 'esp32_bot', 'client_d', 'client_e'].map(nodeId => {
+                    const node = STATIC_NODES.find(n => n.id === nodeId);
+                    const isOnline = nodesOnline[nodeId];
+                    return (
+                      <button
+                        key={nodeId}
+                        type="button"
+                        className={`device-pill ${senderNode === nodeId ? 'active' : ''} ${!isOnline ? 'offline' : ''}`}
+                        onClick={() => isOnline && setSenderNode(nodeId)}
+                        disabled={!isOnline}
+                        title={isOnline ? `Set sender to ${node.label}` : `${node.label} is OFFLINE`}
+                      >
+                        {node.icon} {node.label}
+                      </button>
+                    )
+                  })}
+                </div>
+
                 <form 
                   className="chat-input-area" 
                   onSubmit={(e) => {
                     e.preventDefault()
-                    handleSendMessage(inputMessage)
+                    handleSendMessage(inputMessage, senderNode)
                   }}
                 >
                   <input 
@@ -1082,6 +1280,101 @@ function App() {
 
           {activeDocTab === 'packet' && (
             <div>
+              {/* Interactive Packet Builder Form */}
+              <div className="packet-builder-container">
+                <h4 style={{ marginTop: 0, color: 'var(--primary)' }}>🛠️ Interactive BLE Packet Builder</h4>
+                <p style={{ fontSize: '0.85rem', marginBottom: '16px' }}>Build a custom mesh packet and broadcast it into the visualizer mesh to inspect routing hops.</p>
+                <div className="packet-builder-grid">
+                  <div className="builder-field">
+                    <label>Payload Message:</label>
+                    <input 
+                      type="text" 
+                      className="builder-input" 
+                      value={builderMsg} 
+                      onChange={(e) => setBuilderMsg(e.target.value)} 
+                    />
+                  </div>
+                  <div className="builder-field">
+                    <label>Sender Node:</label>
+                    <select 
+                      className="builder-select" 
+                      value={builderSender} 
+                      onChange={(e) => setBuilderSender(e.target.value)}
+                    >
+                      <option value="esp32_bot">🤖 esp32_bot</option>
+                      <option value="client_c">📱 client_c</option>
+                      <option value="client_d">📱 client_d</option>
+                      <option value="client_e">📱 client_e</option>
+                    </select>
+                  </div>
+                  <div className="builder-field">
+                    <label>Recipient:</label>
+                    <select 
+                      className="builder-select" 
+                      value={builderRecipient} 
+                      onChange={(e) => setBuilderRecipient(e.target.value)}
+                    >
+                      <option value="gateway">💻 gateway</option>
+                    </select>
+                  </div>
+                  <div className="builder-field">
+                    <label>Time-to-Live (TTL):</label>
+                    <select 
+                      className="builder-select" 
+                      value={builderTtl} 
+                      onChange={(e) => setBuilderTtl(parseInt(e.target.value))}
+                    >
+                      <option value="1">1 hop</option>
+                      <option value="2">2 hops</option>
+                      <option value="3">3 hops</option>
+                      <option value="4">4 hops</option>
+                      <option value="5">5 hops</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div style={{ marginTop: '16px', display: 'flex', gap: '16px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                  <div style={{ flexGrow: 1, minWidth: '250px' }}>
+                    <div className="terminal-code" style={{ marginBottom: 0, padding: '10px' }}>
+                      <pre><code style={{ fontSize: '11px' }}>{JSON.stringify({
+                        msg_id: "tx_8a3",
+                        sender: builderSender,
+                        recipient: builderRecipient,
+                        ttl: builderTtl,
+                        part: 1,
+                        total: 1,
+                        payload: builderMsg
+                      }, null, 2)}</code></pre>
+                    </div>
+                  </div>
+                  <button 
+                    type="button" 
+                    className="btn-primary" 
+                    style={{ alignSelf: 'stretch', justifyContent: 'center', height: 'auto' }}
+                    onClick={() => {
+                      const dateStr = new Date().toLocaleTimeString();
+                      setPacketLogs(prev => [
+                        ...prev,
+                        { text: `[${dateStr}] INJECTOR: Broadcasting custom packet...`, type: 'sys' }
+                      ]);
+                      triggerPacketAnimation(builderSender, builderMsg, () => {
+                        setPacketLogs(prev => [
+                          ...prev,
+                          { text: `[${new Date().toLocaleTimeString()}] INJECTOR SUCCESS: Reply packet received from Gateway!`, type: 'rx' }
+                        ]);
+                      }, (err) => {
+                        setPacketLogs(prev => [
+                          ...prev,
+                          { text: `[${new Date().toLocaleTimeString()}] INJECTOR ERROR: Custom packet dropped. Reason: ${err}`, type: 'sys' }
+                        ]);
+                      });
+                    }}
+                  >
+                    🚀 Inject Packet
+                  </button>
+                </div>
+              </div>
+
               <h4>Managed Flooding BLE Packet Format</h4>
               <p>B#NN packets are JSON strings transmitted over BLE Characteristics. The structure utilizes metadata tracking to prevent mesh loops:</p>
               <div className="terminal-code">

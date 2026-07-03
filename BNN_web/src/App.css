@@ -595,3 +595,163 @@
   border-top: 1px solid rgba(255, 255, 255, 0.03);
   padding-top: 20px;
 }
+
+/* Device Selector in Chat */
+.device-selector-bar {
+  display: flex;
+  background: #020205;
+  border-top: 1px solid rgba(0, 255, 102, 0.08);
+  padding: 8px 16px;
+  gap: 8px;
+  align-items: center;
+  overflow-x: auto;
+}
+
+.device-selector-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.device-pill {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary);
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.device-pill:hover:not(.offline) {
+  background: rgba(0, 255, 102, 0.04);
+  color: #fff;
+  border-color: rgba(0, 255, 102, 0.3);
+}
+
+.device-pill.active {
+  background: rgba(0, 255, 102, 0.1);
+  border-color: var(--primary);
+  color: var(--primary);
+  text-shadow: 0 0 4px rgba(var(--primary-rgb), 0.3);
+}
+
+.device-pill.offline {
+  border-color: rgba(255, 51, 102, 0.2);
+  color: var(--text-muted);
+  cursor: not-allowed;
+  text-decoration: line-through;
+}
+
+/* Simulation Controls Panel */
+.sim-controls-panel {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255,255,255,0.04);
+}
+
+.sim-event-btn {
+  flex: 1;
+  font-family: var(--mono);
+  font-size: 11px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary);
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+.sim-event-btn:hover {
+  background: rgba(0, 229, 255, 0.08);
+  border-color: var(--secondary);
+  color: #fff;
+  box-shadow: 0 0 10px rgba(0, 229, 255, 0.15);
+}
+
+.sim-event-btn.danger:hover {
+  background: rgba(255, 51, 102, 0.08);
+  border-color: var(--danger);
+  box-shadow: 0 0 10px rgba(255, 51, 102, 0.15);
+}
+
+/* Node Diagnostics Table */
+.nodes-status-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 15px;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.nodes-status-table th, .nodes-status-table td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.nodes-status-table th {
+  color: var(--secondary);
+  font-weight: normal;
+  border-bottom: 1px solid rgba(0, 229, 255, 0.15);
+}
+
+.nodes-status-table tr:hover td {
+  background: rgba(255, 255, 255, 0.01);
+}
+
+/* Interactive Packet Builder Form */
+.packet-builder-container {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(0, 255, 102, 0.08);
+  border-radius: 6px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.packet-builder-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+@media (min-width: 600px) {
+  .packet-builder-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.builder-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.builder-field label {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.builder-input, .builder-select {
+  background: #020205;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  color: #fff;
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 6px 10px;
+  outline: none;
+}
+
+.builder-input:focus, .builder-select:focus {
+  border-color: var(--primary);
+}
